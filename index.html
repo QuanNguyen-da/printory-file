@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Printory Files</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1d2330;--mut:#6b7280;--line:#e5e7eb;--acc:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#111318;--card:#1b1e25;--fg:#e8eaee;--mut:#9aa1ad;--line:#2a2e37;--acc:#7aa2ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-user-select:none;user-select:none}
+header{padding:14px 16px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:2}
+h1{font-size:17px;margin:0 0 4px;word-break:break-word}
+.crumb{color:var(--mut);font-size:13px}.crumb a{color:var(--acc);text-decoration:none;cursor:pointer}
+main{padding:16px;max-width:1100px;margin:0 auto}
+.folders{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.folders a{padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);text-decoration:none;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer}
+.f .th{height:170px;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.f img{max-width:100%;max-height:170px;object-fit:contain;pointer-events:none}
+.f .pdf{font-size:15px;color:var(--mut);font-weight:600}
+.f .n{padding:8px 10px 2px;font-size:13px;word-break:break-word}
+.f .m{padding:0 10px 8px;color:var(--mut);font-size:12px}
+.msg{color:var(--mut)}
+#v{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;z-index:5}
+#v.on{display:flex}
+#v .bar{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:10px 16px;gap:12px}
+#v .bar span{font-size:14px;word-break:break-word}
+#v button{background:#ffffff26;color:#fff;border:0;border-radius:6px;padding:6px 12px;font-size:15px;cursor:pointer;flex:none}
+#v .body{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;min-height:0}
+#v img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none}
+#v iframe{width:100%;height:100%;border:0;background:#fff}
+</style>
+</head>
+<body oncontextmenu="return false">
+<header><h1 id="title">Printory</h1><div class="crumb" id="crumb"></div></header>
+<main id="main"><p class="msg">Đang tải…</p></main>
+<div id="v"><div class="bar"><span id="vt"></span><button id="vc">Đóng ✕</button></div><div class="body" id="vb"></div></div>
+<script>
+(function(){
+  var API = "https://nnvcknsmnzvcegxnymtc.supabase.co/functions/v1/printory-files";
+  var qs = new URLSearchParams(location.search);
+  var key = qs.get("key") || "";
+  var main = document.getElementById("main");
+  var el = function(tag, attrs, text){ var e=document.createElement(tag); if(attrs) for(var k in attrs) e.setAttribute(k, attrs[k]); if(text!=null) e.textContent=text; return e; };
+  function norm(p){ p=(p||"").replace(/^\/+/,"").replace(/\.\.+/g,""); if(p && p.slice(-1)!=="/") p+="/"; return p; }
+  function go(path){ var q=new URLSearchParams(location.search); q.set("folder", path.replace(/\/$/,"")); history.pushState(null,"","?"+q.toString()); load(path); }
+  function kb(n){ return n ? Math.max(1,Math.round(n/1024))+" KB" : ""; }
+  function crumb(path){
+    var c=document.getElementById("crumb"); c.textContent="";
+    var root=el("a",null,"Tất cả"); root.onclick=function(){go("")}; c.appendChild(root);
+    var acc=""; path.split("/").filter(Boolean).forEach(function(pt){ acc+=pt+"/"; var a=el("a",null,pt); var to=acc; a.onclick=function(){go(to)}; c.appendChild(document.createTextNode(" / ")); c.appendChild(a); });
+    var parts=path.split("/").filter(Boolean); document.getElementById("title").textContent = parts.length ? parts[parts.length-1] : "Printory";
+    document.title = (parts.length ? parts[parts.length-1]+" – " : "")+"Printory Files";
+  }
+  function view(f){
+    document.getElementById("vt").textContent=f.name;
+    var b=document.getElementById("vb"); b.textContent="";
+    if(f.pdf){ var fr=el("iframe",{src:f.url+"#toolbar=0&navpanes=0"}); b.appendChild(fr); }
+    else { var im=el("img",{src:f.url,draggable:"false",alt:""}); b.appendChild(im); }
+    document.getElementById("v").classList.add("on");
+  }
+  function close(){ document.getElementById("v").classList.remove("on"); document.getElementById("vb").textContent=""; }
+  document.getElementById("vc").onclick=close;
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") close(); });
+  function load(path){
+    crumb(path); main.textContent=""; main.appendChild(el("p",{"class":"msg"},"Đang tải…"));
+    fetch(API+"?key="+encodeURIComponent(key)+"&p="+encodeURIComponent(path)).then(function(r){return r.json()}).then(function(d){
+      main.textContent="";
+      if(!d.ok){ main.appendChild(el("p",{"class":"msg"}, d.error || "Không mở được thư mục.")); return; }
+      if(d.matches){ main.appendChild(el("p",{"class":"msg"},"Có nhiều thư mục tên này, chọn một:")); var mw=el("div",{"class":"folders"}); d.matches.forEach(function(m){ var a=el("a",null,"📁 "+m.replace(/\/$/,"")); a.onclick=function(){go(m)}; mw.appendChild(a); }); main.appendChild(mw); return; }
+      if(d.path!==path){ path=d.path; crumb(path); var q=new URLSearchParams(location.search); q.set("folder", path.replace(/\/$/,"")); history.replaceState(null,"","?"+q.toString()); }
+      if(d.folders.length){ var fw=el("div",{"class":"folders"}); d.folders.forEach(function(n){ var a=el("a",null,"📁 "+n); a.onclick=function(){go(path+n+"/")}; fw.appendChild(a); }); main.appendChild(fw); }
+      if(d.files.length){ var g=el("div",{"class":"grid"}); d.files.forEach(function(f){
+        var card=el("div",{"class":"f"}); var th=el("div",{"class":"th"});
+        if(f.pdf) th.appendChild(el("span",{"class":"pdf"},"📄 PDF")); else th.appendChild(el("img",{src:f.url,loading:"lazy",alt:"",draggable:"false"}));
+        card.appendChild(th); card.appendChild(el("div",{"class":"n"},f.name)); card.appendChild(el("div",{"class":"m"},kb(f.size)));
+        card.onclick=function(){view(f)}; g.appendChild(card); }); main.appendChild(g); }
+      if(!d.folders.length && !d.files.length) main.appendChild(el("p",{"class":"msg"},"Thư mục trống."));
+    }).catch(function(){ main.textContent=""; main.appendChild(el("p",{"class":"msg"},"Lỗi kết nối, thử tải lại trang.")); });
+  }
+  window.addEventListener("popstate",function(){ load(norm(new URLSearchParams(location.search).get("folder"))); });
+  if(!key){ main.textContent=""; main.appendChild(el("p",{"class":"msg"},"Link thiếu mã truy cập.")); return; }
+  load(norm(qs.get("folder")));
+})();
+</script>
+</body>
+</html>
